@@ -11,20 +11,27 @@ import { UpdateRecipe } from '../../src/application/use-cases/update-recipe.js';
 import type { UseCases } from '../../src/application/use-cases/use-cases.js';
 import { WriteAccess } from '../../src/infrastructure/auth/write-access.js';
 import { buildApp } from '../../src/infrastructure/http/build-app.js';
+import { OAuthService } from '../../src/infrastructure/oauth/oauth-service.js';
+import { TokenSigner } from '../../src/infrastructure/oauth/token-signer.js';
 import { CooklangRecipeParser } from '../../src/infrastructure/parsing/cooklang-recipe-parser.js';
 import { FsRecipeRepository } from '../../src/infrastructure/persistence/fs-recipe-repository.js';
 import { SystemClock } from '../../src/infrastructure/time/system-clock.js';
 import { CollectingEventPublisher } from './fakes.js';
 
 export const TEST_WRITE_TOKEN = 'test-write-token';
+export const TEST_OAUTH_SECRET = 'test-oauth-signing-secret';
+export const TEST_OAUTH_PASSWORD = 'hunter2';
 
 export interface TestApp {
   app: FastifyInstance;
   recipesDir: string;
+  oauthService: OAuthService | null;
 }
 
 export interface TestAppOptions {
   writeToken?: string | null;
+  /** Enable the OAuth authorization server (protects /mcp). */
+  oauth?: boolean;
 }
 
 /** Boots the real application against a throwaway recipes directory. */
@@ -45,11 +52,22 @@ export async function buildTestApp(options: TestAppOptions = {}): Promise<TestAp
     deleteRecipe: new DeleteRecipe(repository, clock, events),
   };
 
+  const oauthService =
+    options.oauth === true
+      ? new OAuthService({
+          signer: new TokenSigner(TEST_OAUTH_SECRET),
+          clock,
+          password: TEST_OAUTH_PASSWORD,
+          serverName: 'Cahier de recette (test)',
+        })
+      : null;
+
   const app = await buildApp({
     useCases,
     writeAccess: new WriteAccess(
       options.writeToken === undefined ? TEST_WRITE_TOKEN : options.writeToken,
     ),
+    oauthService,
   });
-  return { app, recipesDir };
+  return { app, recipesDir, oauthService };
 }

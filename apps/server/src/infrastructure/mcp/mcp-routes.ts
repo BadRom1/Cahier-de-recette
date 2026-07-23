@@ -2,21 +2,33 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import type { FastifyInstance } from 'fastify';
 import type { UseCases } from '../../application/use-cases/use-cases.js';
 import { WriteAccess } from '../auth/write-access.js';
+import { resolveBaseUrl } from '../http/base-url.js';
+import type { OAuthService } from '../oauth/oauth-service.js';
 import { buildMcpServer } from './build-mcp-server.js';
 
 interface McpRoutesOptions {
   useCases: UseCases;
   writeAccess: WriteAccess;
+  /** When set, the MCP endpoint becomes an OAuth-protected resource. */
+  oauthService: OAuthService | null;
+  publicUrl: string | null;
 }
 
 /**
  * Exposes the MCP server over Streamable HTTP at `/mcp`, in stateless mode:
  * a fresh server/transport pair per request, no session tracking. This keeps
  * the endpoint horizontally scalable and restart-safe.
+ *
+ * When OAuth is enabled the endpoint is a protected resource: requests must
+ * carry a valid OAuth access token (or the legacy write token), otherwise they
+ * receive a `401` with a `WWW-Authenticate` challenge pointing at the
+ * protected-resource metadata — this is what lets Claude Web start the
+ * authorization flow. When OAuth is disabled the endpoint stays public for
+ * reads, with writes still gated by the write token.
  */
 export function registerMcpRoutes(
   app: FastifyInstance,
-  { useCases, writeAccess }: McpRoutesOptions,
+  { useCases, writeAccess, oauthService, publicUrl }: McpRoutesOptions,
 ): void {
   // Scoped plugin: leave the request stream untouched so the MCP transport
   // (which converts it to a Web Standard Request) can consume it itself.
@@ -27,10 +39,28 @@ export function registerMcpRoutes(
     });
 
     scope.post('/mcp', async (request, reply) => {
-      const presentedToken = WriteAccess.tokenFromAuthorizationHeader(
-        request.headers.authorization,
-      );
-      const server = buildMcpServer({ useCases, writeAccess, presentedToken });
+      const bearer = WriteAccess.tokenFromAuthorizationHeader(request.headers.authorization);
+
+      let writeAuthorized = false;
+      if (bearer !== null) {
+        if (writeAccess.verify(bearer)) {
+          writeAuthorized = true;
+        } else if (oauthService !== null) {
+          const claims = oauthService.verifyAccessToken(bearer);
+          writeAuthorized = claims !== null && claims.scopes.includes('recipes:write');
+        }
+      }
+
+      // OAuth on + no valid credentials → challenge so the client can authorize.
+      if (oauthService !== null && !writeAuthorized) {
+        const resourceMetadata = `${resolveBaseUrl(request, publicUrl)}/.well-known/oauth-protected-resource`;
+        return reply
+          .code(401)
+          .header('www-authenticate', `Bearer resource_metadata="${resourceMetadata}"`)
+          .send({ error: 'unauthorized', error_description: 'A valid access token is required' });
+      }
+
+      const server = buildMcpServer({ useCases, writeAccess, writeAuthorized });
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableJsonResponse: true,

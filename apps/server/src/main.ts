@@ -10,6 +10,8 @@ import { WriteAccess } from './infrastructure/auth/write-access.js';
 import { loadConfig } from './infrastructure/config/config.js';
 import { LoggingEventPublisher } from './infrastructure/events/logging-event-publisher.js';
 import { buildApp } from './infrastructure/http/build-app.js';
+import { OAuthService } from './infrastructure/oauth/oauth-service.js';
+import { TokenSigner } from './infrastructure/oauth/token-signer.js';
 import { CooklangRecipeParser } from './infrastructure/parsing/cooklang-recipe-parser.js';
 import { FsRecipeRepository } from './infrastructure/persistence/fs-recipe-repository.js';
 import { seedRecipesIfEmpty } from './infrastructure/persistence/seed-recipes.js';
@@ -31,6 +33,20 @@ async function main(): Promise<void> {
   const writeAccess = new WriteAccess(config.writeToken);
   const events = new LoggingEventPublisher(logger);
 
+  // OAuth is enabled when a signing secret and a consent password are available
+  // (the password falls back to WRITE_TOKEN). It turns /mcp into an OAuth
+  // protected resource so remote clients such as Claude Web can authorize.
+  const oauthPassword = config.oauthPassword ?? config.writeToken;
+  const oauthService =
+    config.oauthSecret !== null && oauthPassword !== null
+      ? new OAuthService({
+          signer: new TokenSigner(config.oauthSecret),
+          clock,
+          password: oauthPassword,
+          serverName: 'Cahier de recette',
+        })
+      : null;
+
   const useCases: UseCases = {
     listRecipes: new ListRecipes(repository, parser),
     getRecipe: new GetRecipe(repository, parser),
@@ -44,11 +60,18 @@ async function main(): Promise<void> {
     useCases,
     writeAccess,
     webDistDir: config.webDistDir,
+    oauthService,
+    publicUrl: config.publicUrl,
     loggerInstance: logger,
   });
 
   if (!writeAccess.enabled) {
     app.log.warn('WRITE_TOKEN is not set: all write operations are disabled');
+  }
+  if (oauthService === null) {
+    app.log.info('OAUTH_SECRET is not set: the MCP endpoint stays public (no OAuth)');
+  } else {
+    app.log.info('OAuth enabled: the MCP endpoint requires a valid access token');
   }
 
   try {

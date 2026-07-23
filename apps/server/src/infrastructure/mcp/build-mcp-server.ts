@@ -7,8 +7,11 @@ import type { WriteAccess } from '../auth/write-access.js';
 interface McpDependencies {
   useCases: UseCases;
   writeAccess: WriteAccess;
-  /** Token presented by the connected client (from the HTTP Authorization header). */
-  presentedToken: string | null;
+  /**
+   * Whether the transport-level credentials (a valid OAuth access token or the
+   * legacy write token in the `Authorization` header) already grant write access.
+   */
+  writeAuthorized: boolean;
 }
 
 interface ToolResult {
@@ -36,15 +39,18 @@ function fail(error: unknown): ToolResult {
  * HTTP `Authorization: Bearer` header or from the `token` tool argument.
  */
 export function buildMcpServer(deps: McpDependencies): McpServer {
-  const { useCases, writeAccess, presentedToken } = deps;
+  const { useCases, writeAccess, writeAuthorized } = deps;
 
   const server = new McpServer({
     name: 'cahier-de-recette',
     version: '0.1.0',
   });
 
+  // The header credentials (OAuth token or legacy write token) grant write
+  // access; the per-tool `token` argument remains a fallback for clients that
+  // cannot set an Authorization header.
   const authorized = (explicitToken: string | undefined): boolean =>
-    writeAccess.verify(explicitToken ?? presentedToken);
+    writeAuthorized || (explicitToken !== undefined && writeAccess.verify(explicitToken));
 
   const unauthorized = (): ToolResult => ({
     content: [

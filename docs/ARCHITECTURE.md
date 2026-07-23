@@ -68,14 +68,15 @@ Règle vérifiée : cette couche **n'importe jamais l'infrastructure ni aucun pa
 
 ### `infrastructure/` — les adaptateurs
 
-| Adaptateur                             | Port / rôle                     | Choix technique                                                                                             |
-| -------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `FsRecipeRepository`                   | `RecipeRepository`              | un fichier `<slug>.cook` par recette : portable (app mobile, git, rsync), écrit atomiquement (tmp + rename) |
-| `CooklangRecipeParser`                 | `RecipeParser`                  | parseur officiel `@cooklang/cooklang` (cooklang-rs compilé en WASM), frontmatter YAML et métadonnées `>>`   |
-| `recipe-routes` / `build-app`          | adaptateur entrant REST         | Fastify 5, erreurs domaine → statuts HTTP                                                                   |
-| `mcp-routes` / `build-mcp-server`      | adaptateur entrant MCP          | SDK officiel, Streamable HTTP **sans état** (un couple serveur/transport par requête)                       |
-| `WriteAccess`                          | garde d'écriture                | comparaison en temps constant, _fail closed_ sans `WRITE_TOKEN`                                             |
-| `SystemClock`, `LoggingEventPublisher` | `Clock`, `DomainEventPublisher` | trivial, remplaçables (bus, webhooks…)                                                                      |
+| Adaptateur                             | Port / rôle                      | Choix technique                                                                                             |
+| -------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `FsRecipeRepository`                   | `RecipeRepository`               | un fichier `<slug>.cook` par recette : portable (app mobile, git, rsync), écrit atomiquement (tmp + rename) |
+| `CooklangRecipeParser`                 | `RecipeParser`                   | parseur officiel `@cooklang/cooklang` (cooklang-rs compilé en WASM), frontmatter YAML et métadonnées `>>`   |
+| `recipe-routes` / `build-app`          | adaptateur entrant REST          | Fastify 5, erreurs domaine → statuts HTTP                                                                   |
+| `mcp-routes` / `build-mcp-server`      | adaptateur entrant MCP           | SDK officiel, Streamable HTTP **sans état** (un couple serveur/transport par requête)                       |
+| `WriteAccess`                          | garde d'écriture                 | comparaison en temps constant, _fail closed_ sans `WRITE_TOKEN`                                             |
+| `oauth-routes` / `OAuthService`        | serveur d'autorisation OAuth 2.1 | RFC 8414/9728/7591, PKCE S256, jetons signés HMAC **sans état** (rien à persister) — protège `/mcp`         |
+| `SystemClock`, `LoggingEventPublisher` | `Clock`, `DomainEventPublisher`  | trivial, remplaçables (bus, webhooks…)                                                                      |
 
 ### `main.ts` — composition root
 
@@ -89,6 +90,10 @@ Seul endroit où les adaptateurs sont instanciés et branchés sur les ports.
   toucher au domaine ni aux use cases.
 - **Lecture publique / écriture à jeton** : la garde est un souci d'adaptateur (HTTP header,
   argument MCP), pas du domaine — les use cases restent ignorants de l'authentification.
+- **OAuth 2.1 sans état** : quand `OAUTH_SECRET` est défini, `/mcp` devient une ressource
+  protégée pour les connecteurs distants (Claude Web). Codes, jetons et identifiants de client
+  sont auto-portés par des jetons signés HMAC — aucun stockage, l'endpoint reste multi-instances
+  et insensible à la veille. Reste optionnel : sans `OAUTH_SECRET`, `/mcp` est inchangé.
 - **MCP sans état** : pas de session en mémoire, chaque requête est autonome ; l'endpoint
   supporte donc plusieurs instances et les redémarrages sans reconnexion des agents.
 - **Événements de domaine** publiés vers les logs aujourd'hui ; le port

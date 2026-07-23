@@ -22,13 +22,13 @@ répertoire de données est vide.
 
 ## Interfaces exposées
 
-| Interface               | URL                                          | Auth                        |
-| ----------------------- | -------------------------------------------- | --------------------------- |
-| Application web         | `/`                                          | —                           |
-| API REST                | `/api/recipes`                               | écriture seulement          |
-| Fichiers Cooklang bruts | `/recipes/<slug>.cook`, `/recipes/index.txt` | —                           |
-| MCP (Streamable HTTP)   | `/mcp`                                       | outils d'écriture seulement |
-| Santé                   | `/api/health`                                | —                           |
+| Interface               | URL                                          | Auth                           |
+| ----------------------- | -------------------------------------------- | ------------------------------ |
+| Application web         | `/`                                          | —                              |
+| API REST                | `/api/recipes`                               | écriture seulement             |
+| Fichiers Cooklang bruts | `/recipes/<slug>.cook`, `/recipes/index.txt` | —                              |
+| MCP (Streamable HTTP)   | `/mcp`                                       | écriture ou OAuth (Claude Web) |
+| Santé                   | `/api/health`                                | —                              |
 
 ### API REST
 
@@ -69,6 +69,44 @@ Exemple de configuration client (Claude Code) :
 claude mcp add --transport http cahier-de-recette https://<hote>/mcp \
   --header "Authorization: Bearer $WRITE_TOKEN"   # en-tête facultatif, requis pour écrire
 ```
+
+### OAuth 2.1 (brancher le MCP dans Claude Web)
+
+Pour connecter le serveur comme **connecteur distant** dans Claude Web (ou tout client
+MCP qui exige OAuth), on active un petit serveur d'autorisation **OAuth 2.1** intégré. Il
+est **sans état** — codes, jetons d'accès/rafraîchissement et identifiants de client sont
+tous auto-portés par des jetons signés (HMAC-SHA256), donc rien n'est persisté et `/mcp`
+reste scalable et insensible aux redémarrages/veille.
+
+Il implémente les métadonnées de découverte ([RFC 8414](https://www.rfc-editor.org/rfc/rfc8414)
+et [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728)), l'enregistrement dynamique de client
+([RFC 7591](https://www.rfc-editor.org/rfc/rfc7591)) et le flux `authorization_code` avec
+**PKCE obligatoire** (S256) + jetons de rafraîchissement.
+
+| Endpoint                                  | Rôle                                   |
+| ----------------------------------------- | -------------------------------------- |
+| `/.well-known/oauth-protected-resource`   | métadonnées de la ressource protégée   |
+| `/.well-known/oauth-authorization-server` | métadonnées du serveur d'autorisation  |
+| `/register`                               | enregistrement dynamique de client     |
+| `/authorize`                              | écran de consentement (mot de passe)   |
+| `/token`                                  | échange code → jeton, rafraîchissement |
+
+**Activation** : définir `OAUTH_SECRET` (`openssl rand -hex 32`). `/mcp` devient alors une
+ressource protégée : une requête sans jeton valide reçoit `401` avec un en-tête
+`WWW-Authenticate` pointant vers les métadonnées, ce qui déclenche le flux OAuth côté client.
+Le propriétaire s'authentifie sur l'écran de consentement avec `OAUTH_PASSWORD` (à défaut
+`WRITE_TOKEN`) ; une autorisation réussie accorde la lecture **et** l'écriture. Le jeton
+d'écriture historique (`Authorization: Bearer $WRITE_TOKEN`) reste accepté sur `/mcp`.
+
+Renseigner `PUBLIC_URL` (URL https publique) pour que les métadonnées annoncent les bonnes
+URL absolues derrière le proxy Railway.
+
+Dans Claude Web : **Paramètres → Connecteurs → Ajouter un connecteur personnalisé**, coller
+`https://<hote>/mcp`, puis suivre la connexion OAuth (saisie du mot de passe sur l'écran de
+consentement).
+
+Tant que `OAUTH_SECRET` est absent, `/mcp` reste public (lecture ouverte, écriture protégée
+par `WRITE_TOKEN`) — comportement inchangé.
 
 ### Application mobile Cooklang (Android / iOS)
 
@@ -148,4 +186,7 @@ veille ; à désactiver dans `railway.toml` si la latence de réveil gêne (agen
 | `SEED_RECIPES_DIR` | `./recipes`        | recettes copiées si `RECIPES_DIR` est vide (`""` pour désactiver) |
 | `WRITE_TOKEN`      | —                  | jeton d'écriture ; **écritures désactivées si absent**            |
 | `WEB_DIST_DIR`     | `./apps/web/dist`  | build web servi statiquement si le répertoire existe              |
+| `OAUTH_SECRET`     | —                  | clé HMAC signant les jetons OAuth ; **OAuth activé si présent**   |
+| `OAUTH_PASSWORD`   | (`WRITE_TOKEN`)    | mot de passe de l'écran de consentement OAuth                     |
+| `PUBLIC_URL`       | (requête)          | URL https publique annoncée dans les métadonnées OAuth            |
 | `LOG_LEVEL`        | `info`             | niveau de log (pino)                                              |
