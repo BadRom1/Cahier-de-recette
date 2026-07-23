@@ -30,6 +30,21 @@ function StepFragment({ item }: { item: StepItem }) {
   }
 }
 
+// Triggers a client-side download from a blob URL so the browser keeps the exact
+// `.cook` filename. Linking to the server endpoint would let Chrome append `.txt`,
+// since it serves the file as `text/plain` and `.cook` isn't a recognised extension.
+function downloadSource(recipe: RecipeDetail) {
+  const blob = new Blob([recipe.source], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${recipe.slug}.cook`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function RecipeDetailPage({ slug }: { slug: string }) {
   const [recipe, setRecipe] = useState<RecipeDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -124,13 +139,9 @@ export function RecipeDetailPage({ slug }: { slug: string }) {
       </div>
 
       <footer className="recipe-actions">
-        <a
-          className="button"
-          href={`/recipes/${recipe.slug}.cook`}
-          download={`${recipe.slug}.cook`}
-        >
+        <button type="button" className="button" onClick={() => downloadSource(recipe)}>
           Télécharger le .cook
-        </a>
+        </button>
         <button type="button" className="button" onClick={() => setShowSource(!showSource)}>
           {showSource ? 'Masquer la source' : 'Voir la source Cooklang'}
         </button>

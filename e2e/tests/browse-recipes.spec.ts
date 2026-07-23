@@ -31,7 +31,7 @@ test.describe('Consultation des recettes', () => {
     await expect(page.getByRole('heading', { name: 'Ingrédients' })).toBeVisible();
     await expect(page.locator('.ingredients-panel')).toContainText('farine');
     await expect(page.locator('.steps li').first()).toContainText('Mélanger');
-    await expect(page.getByRole('link', { name: 'Télécharger le .cook' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Télécharger le .cook' })).toBeVisible();
   });
 
   test('la source Cooklang est consultable', async ({ page }) => {
