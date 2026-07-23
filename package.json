@@ -23,7 +23,7 @@
     "test:integration": "pnpm --filter @cahier/server test:integration",
     "test:e2e": "pnpm --filter @cahier/e2e test",
     "verify": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm arch && pnpm secrets && pnpm test",
-    "prepare": "lefthook install"
+    "prepare": "test -d .git && lefthook install || true"
   },
   "devDependencies": {
     "@secretlint/secretlint-rule-preset-recommend": "^13.0.4",
