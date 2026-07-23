@@ -1,0 +1,22 @@
+# Git hooks — fast checks on commit, full gate on push.
+pre-commit:
+  parallel: true
+  jobs:
+    - name: lint
+      glob: '*.{ts,tsx,js,jsx,mjs,cjs}'
+      run: pnpm exec oxlint --deny-warnings {staged_files}
+    - name: format
+      glob: '*.{ts,tsx,js,jsx,json,md,yml,yaml,html,css}'
+      run: pnpm exec prettier --check {staged_files}
+    - name: secrets
+      run: pnpm exec secretlint --secretlintignore .gitignore {staged_files}
+
+pre-push:
+  parallel: true
+  jobs:
+    - name: typecheck
+      run: pnpm typecheck
+    - name: architecture
+      run: pnpm arch
+    - name: unit-tests
+      run: pnpm --filter @cahier/server test:unit

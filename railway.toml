@@ -1,0 +1,17 @@
+# Railway deployment configuration.
+#
+# Setup (one-time, in the Railway dashboard):
+#   1. Create a project from this GitHub repository.
+#   2. Add a volume and mount it at /data (the .cook files live there).
+#   3. Set the WRITE_TOKEN environment variable (a long random secret).
+# Every push to main then deploys automatically.
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/api/health"
+healthcheckTimeout = 60
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 5
