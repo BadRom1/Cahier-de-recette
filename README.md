@@ -133,6 +133,12 @@ healthcheck `/api/health`). Côté Railway :
 
 Au premier démarrage sur un volume vide, les recettes d'exemple sont copiées automatiquement.
 
+**Mise en veille** : `railway.toml` active l'App Sleeping (`sleepApplication = true`) — le
+service est mis en veille après ~10 minutes sans requête entrante et se réveille
+automatiquement à la requête suivante (démarrage à froid de quelques secondes). Le serveur
+n'a ni timer ni tâche de fond et ne logge que sur requête, ce qui le rend éligible à la
+veille ; à désactiver dans `railway.toml` si la latence de réveil gêne (agents MCP pressés).
+
 ## Configuration
 
 | Variable           | Défaut             | Description                                                       |

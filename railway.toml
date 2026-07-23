@@ -18,3 +18,8 @@ healthcheckPath = "/api/health"
 healthcheckTimeout = 60
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 5
+# App Sleeping: the service scales to zero after ~10 minutes without inbound
+# traffic and wakes on the next request (a few seconds of cold start). The
+# server is silent when idle (no timers, request-only logging), which is what
+# makes it eligible for sleep.
+sleepApplication = true
