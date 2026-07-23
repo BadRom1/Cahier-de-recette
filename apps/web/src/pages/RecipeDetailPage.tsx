@@ -1,23 +1,26 @@
 import { useEffect, useState } from 'react';
 import { fetchRecipe, type RecipeDetail, type StepItem } from '../api';
+import { scaleQuantity } from '../scaling';
 
-function StepFragment({ item }: { item: StepItem }) {
+function StepFragment({ item, factor }: { item: StepItem; factor: number }) {
   switch (item.type) {
     case 'text':
       return <>{item.value}</>;
-    case 'ingredient':
+    case 'ingredient': {
+      const quantity = scaleQuantity(item.quantity, factor);
       return (
-        <strong className="inline-ingredient" title={`${item.quantity} ${item.units}`.trim()}>
+        <strong className="inline-ingredient" title={`${quantity} ${item.units}`.trim()}>
           {item.name}
-          {item.quantity !== '' && (
+          {quantity !== '' && (
             <span className="inline-quantity">
               {' '}
-              ({item.quantity}
+              ({quantity}
               {item.units !== '' ? ` ${item.units}` : ''})
             </span>
           )}
         </strong>
       );
+    }
     case 'cookware':
       return <em className="inline-cookware">{item.name}</em>;
     case 'timer':
@@ -49,15 +52,21 @@ export function RecipeDetailPage({ slug }: { slug: string }) {
   const [recipe, setRecipe] = useState<RecipeDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showSource, setShowSource] = useState(false);
+  const [servings, setServings] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setRecipe(null);
     setError(null);
+    setServings(null);
     const load = async () => {
       try {
         const result = await fetchRecipe(slug);
-        if (!cancelled) setRecipe(result);
+        if (!cancelled) {
+          setRecipe(result);
+          const base = result.servings === null ? null : Number.parseInt(result.servings, 10);
+          setServings(base !== null && Number.isFinite(base) && base > 0 ? base : null);
+        }
       } catch (cause) {
         if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
       }
@@ -80,6 +89,15 @@ export function RecipeDetailPage({ slug }: { slug: string }) {
     return <p className="status">Chargement…</p>;
   }
 
+  const baseServings = recipe.servings === null ? null : Number.parseInt(recipe.servings, 10);
+  const hasScaling =
+    baseServings !== null && Number.isFinite(baseServings) && baseServings > 0 && servings !== null;
+  const factor = hasScaling ? servings / baseServings : 1;
+
+  const changeServings = (next: number) => {
+    if (next >= 1 && next <= 999) setServings(next);
+  };
+
   return (
     <article className="recipe-detail">
       <nav className="breadcrumb">
@@ -100,17 +118,58 @@ export function RecipeDetailPage({ slug }: { slug: string }) {
 
       <div className="recipe-columns">
         <aside className="ingredients-panel">
-          <h2>Ingrédients</h2>
+          <div className="ingredients-header">
+            <h2>Ingrédients</h2>
+            {hasScaling && (
+              <div className="servings-control" role="group" aria-label="Nombre de personnes">
+                <button
+                  type="button"
+                  className="servings-button"
+                  aria-label="Réduire le nombre de personnes"
+                  disabled={servings <= 1}
+                  onClick={() => changeServings(servings - 1)}
+                >
+                  −
+                </button>
+                <label className="servings-value">
+                  <input
+                    type="number"
+                    min={1}
+                    max={999}
+                    value={servings}
+                    aria-label="Nombre de personnes"
+                    onChange={(event) => {
+                      const next = Number.parseInt(event.target.value, 10);
+                      if (Number.isFinite(next)) changeServings(next);
+                    }}
+                  />
+                  <span>pers.</span>
+                </label>
+                <button
+                  type="button"
+                  className="servings-button"
+                  aria-label="Augmenter le nombre de personnes"
+                  disabled={servings >= 999}
+                  onClick={() => changeServings(servings + 1)}
+                >
+                  +
+                </button>
+              </div>
+            )}
+          </div>
           <ul>
-            {recipe.ingredients.map((ingredient, index) => (
-              <li key={`${ingredient.name}-${index}`}>
-                <span className="ingredient-qty">
-                  {ingredient.quantity}
-                  {ingredient.units !== '' ? ` ${ingredient.units}` : ''}
-                </span>{' '}
-                {ingredient.name}
-              </li>
-            ))}
+            {recipe.ingredients.map((ingredient, index) => {
+              const quantity = scaleQuantity(ingredient.quantity, factor);
+              return (
+                <li key={`${ingredient.name}-${index}`}>
+                  <span className="ingredient-qty">
+                    {quantity}
+                    {ingredient.units !== '' ? ` ${ingredient.units}` : ''}
+                  </span>{' '}
+                  {ingredient.name}
+                </li>
+              );
+            })}
           </ul>
           {recipe.cookware.length > 0 && (
             <>
@@ -130,7 +189,7 @@ export function RecipeDetailPage({ slug }: { slug: string }) {
             {recipe.steps.map((step, index) => (
               <li key={index}>
                 {step.map((item, itemIndex) => (
-                  <StepFragment key={itemIndex} item={item} />
+                  <StepFragment key={itemIndex} item={item} factor={factor} />
                 ))}
               </li>
             ))}
