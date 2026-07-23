@@ -39,4 +39,20 @@ test.describe('Consultation des recettes', () => {
     await page.getByRole('button', { name: 'Voir la source Cooklang' }).click();
     await expect(page.locator('.source-view')).toContainText('@farine{250%g}');
   });
+
+  test('faire varier le nombre de personnes met à l’échelle les ingrédients', async ({ page }) => {
+    await page.goto('/#/recette/crepes');
+    const flour = page.locator('.ingredients-panel li', { hasText: 'farine' });
+    await expect(flour).toContainText('250 g');
+
+    // Crêpes : 4 personnes de base → doubler pour 8 personnes.
+    await page.getByRole('button', { name: 'Augmenter le nombre de personnes' }).click();
+    await page.getByRole('button', { name: 'Augmenter le nombre de personnes' }).click();
+    await page.getByRole('button', { name: 'Augmenter le nombre de personnes' }).click();
+    await page.getByRole('button', { name: 'Augmenter le nombre de personnes' }).click();
+
+    await expect(page.getByRole('spinbutton', { name: 'Nombre de personnes' })).toHaveValue('8');
+    await expect(flour).toContainText('500 g');
+    await expect(page.locator('.steps')).toContainText('oeufs (6)');
+  });
 });
