@@ -115,28 +115,31 @@ pas de modules orphelins.
 fichiers stagés (pre-commit) puis typecheck + architecture + tests unitaires (pre-push).
 
 La CI GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) rejoue tout :
-qualité, tests unitaires/intégration, e2e Playwright et build de l'image Docker (avec
-vérification du healthcheck).
+qualité, tests unitaires/intégration, e2e Playwright, plus un job de démarrage en conditions
+de production (même build et même commande de lancement que Railway).
 
 ## Déploiement sur Railway
 
-Le dépôt contient un [`Dockerfile`](Dockerfile) multi-étages et un
-[`railway.toml`](railway.toml). Côté Railway :
+Le déploiement utilise le **build natif Railway (Railpack)** — pas de Dockerfile — configuré
+par [`railway.toml`](railway.toml) (`pnpm build`, démarrage `node apps/server/dist/main.js`,
+healthcheck `/api/health`). Côté Railway :
 
-1. créer un projet depuis ce dépôt GitHub (builder Dockerfile détecté automatiquement) ;
-2. **monter un volume sur `/data`** — les `.cook` y sont stockés et survivent aux déploiements ;
-3. définir la variable `WRITE_TOKEN` (ex. `openssl rand -hex 32`).
+1. créer un projet depuis ce dépôt GitHub ;
+2. **monter un volume** (ex. sur `/data`) et définir `RECIPES_DIR=/data/recipes` — les
+   `.cook` y sont stockés et survivent aux déploiements ;
+3. définir la variable `WRITE_TOKEN` (ex. `openssl rand -hex 32`) ;
+4. activer **« Wait for CI » (Check Suites)** dans les réglages du service : un push sur
+   `main` n'est alors déployé que si le workflow GitHub Actions est vert.
 
 Au premier démarrage sur un volume vide, les recettes d'exemple sont copiées automatiquement.
-Le healthcheck est `/api/health`.
 
 ## Configuration
 
-| Variable           | Défaut             | Description                                            |
-| ------------------ | ------------------ | ------------------------------------------------------ |
-| `PORT` / `HOST`    | `3000` / `0.0.0.0` | écoute HTTP                                            |
-| `RECIPES_DIR`      | `./data/recipes`   | répertoire des `.cook` (volume en prod)                |
-| `SEED_RECIPES_DIR` | —                  | recettes copiées si `RECIPES_DIR` est vide             |
-| `WRITE_TOKEN`      | —                  | jeton d'écriture ; **écritures désactivées si absent** |
-| `WEB_DIST_DIR`     | —                  | build web servi statiquement si défini                 |
-| `LOG_LEVEL`        | `info`             | niveau de log (pino)                                   |
+| Variable           | Défaut             | Description                                                       |
+| ------------------ | ------------------ | ----------------------------------------------------------------- |
+| `PORT` / `HOST`    | `3000` / `0.0.0.0` | écoute HTTP                                                       |
+| `RECIPES_DIR`      | `./data/recipes`   | répertoire des `.cook` (volume en prod)                           |
+| `SEED_RECIPES_DIR` | `./recipes`        | recettes copiées si `RECIPES_DIR` est vide (`""` pour désactiver) |
+| `WRITE_TOKEN`      | —                  | jeton d'écriture ; **écritures désactivées si absent**            |
+| `WEB_DIST_DIR`     | `./apps/web/dist`  | build web servi statiquement si le répertoire existe              |
+| `LOG_LEVEL`        | `info`             | niveau de log (pino)                                              |

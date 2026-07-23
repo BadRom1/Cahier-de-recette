@@ -72,26 +72,32 @@ jobs:
           path: e2e/playwright-report/
           retention-days: 7
 
-  docker:
-    name: Docker image build
+  boot-check:
+    name: Production boot check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build image
-        run: docker build -t cahier-de-recette:ci .
-      - name: Boot container and check health
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build (same command as the Railway native build)
+        run: pnpm build
+      - name: Boot the server and check health
         run: |
-          docker run -d --rm -p 3000:3000 -e WRITE_TOKEN=ci-check --name cahier cahier-de-recette:ci
+          WRITE_TOKEN=ci-check node apps/server/dist/main.js &
+          SERVER_PID=$!
           for i in $(seq 1 20); do
             if curl -fsS http://localhost:3000/api/health > /dev/null; then
-              echo "healthy" && docker stop cahier && exit 0
+              echo "healthy" && kill "$SERVER_PID" && exit 0
             fi
             sleep 1
           done
-          docker logs cahier
-          docker stop cahier
+          kill "$SERVER_PID" || true
           exit 1
 
-  # Railway deploys this repository through its GitHub integration (see railway.toml).
-  # Connect the repo in the Railway dashboard; every push to main is then deployed
-  # automatically once the jobs above are green (enable "Wait for CI" in Railway).
+  # Deployment: Railway builds natively (Railpack — see railway.toml), triggered by its
+  # GitHub integration on push to main. Enable "Wait for CI" (Check Suites) in the Railway
+  # service settings so the deployment only starts once this workflow is green.

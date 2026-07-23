@@ -14,13 +14,16 @@ export interface AppConfig {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const writeToken = env.WRITE_TOKEN?.trim() ?? '';
+  // Set SEED_RECIPES_DIR to an empty string to disable seeding entirely.
+  const seedRecipesDir = env.SEED_RECIPES_DIR ?? './recipes';
   return {
     host: env.HOST ?? '0.0.0.0',
     port: Number.parseInt(env.PORT ?? '3000', 10),
     recipesDir: env.RECIPES_DIR ?? './data/recipes',
-    seedRecipesDir: env.SEED_RECIPES_DIR ?? null,
+    // Defaults match a checkout/deploy running from the repository root.
+    seedRecipesDir: seedRecipesDir.trim() === '' ? null : seedRecipesDir,
     writeToken: writeToken === '' ? null : writeToken,
-    webDistDir: env.WEB_DIST_DIR ?? null,
+    webDistDir: env.WEB_DIST_DIR ?? './apps/web/dist',
     logLevel: env.LOG_LEVEL ?? 'info',
   };
 }

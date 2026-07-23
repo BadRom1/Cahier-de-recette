@@ -1,16 +1,19 @@
-# Railway deployment configuration.
+# Railway deployment configuration — native build (Railpack), no Dockerfile.
 #
 # Setup (one-time, in the Railway dashboard):
 #   1. Create a project from this GitHub repository.
-#   2. Add a volume and mount it at /data (the .cook files live there).
+#   2. Add a volume mounted at /data (the .cook files live there) and set
+#      the RECIPES_DIR=/data/recipes environment variable.
 #   3. Set the WRITE_TOKEN environment variable (a long random secret).
-# Every push to main then deploys automatically.
+#   4. In the service settings, enable "Wait for CI" (Check Suites) so a push
+#      to main is only deployed after the GitHub Actions workflow is green.
 
 [build]
-builder = "dockerfile"
-dockerfilePath = "Dockerfile"
+builder = "RAILPACK"
+buildCommand = "pnpm build"
 
 [deploy]
+startCommand = "node apps/server/dist/main.js"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 60
 restartPolicyType = "on_failure"
