@@ -1,0 +1,35 @@
+{
+  "name": "cahier-de-recette",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cooklang recipe server (REST + MCP) and web app — DDD & hexagonal architecture",
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm --filter @cahier/web build && pnpm --filter @cahier/server build",
+    "dev": "pnpm --parallel --filter @cahier/server --filter @cahier/web dev",
+    "start": "pnpm --filter @cahier/server start",
+    "lint": "oxlint --deny-warnings .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r typecheck",
+    "arch": "pnpm --filter @cahier/server arch",
+    "secrets": "secretlint --secretlintignore .gitignore \"**/*\"",
+    "test": "pnpm --filter @cahier/server test",
+    "test:unit": "pnpm --filter @cahier/server test:unit",
+    "test:integration": "pnpm --filter @cahier/server test:integration",
+    "test:e2e": "pnpm --filter @cahier/e2e test",
+    "verify": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm arch && pnpm secrets && pnpm test",
+    "prepare": "lefthook install"
+  },
+  "devDependencies": {
+    "@secretlint/secretlint-rule-preset-recommend": "^13.0.4",
+    "lefthook": "^2.1.10",
+    "oxlint": "^1.75.0",
+    "prettier": "^3.9.6",
+    "secretlint": "^13.0.4"
+  }
+}

@@ -1,0 +1,25 @@
+# Railway deployment configuration — native build (Railpack), no Dockerfile.
+#
+# Setup (one-time, in the Railway dashboard):
+#   1. Create a project from this GitHub repository.
+#   2. Add a volume mounted at /data (the .cook files live there) and set
+#      the RECIPES_DIR=/data/recipes environment variable.
+#   3. Set the WRITE_TOKEN environment variable (a long random secret).
+#   4. In the service settings, enable "Wait for CI" (Check Suites) so a push
+#      to main is only deployed after the GitHub Actions workflow is green.
+
+[build]
+builder = "RAILPACK"
+buildCommand = "pnpm build"
+
+[deploy]
+startCommand = "node apps/server/dist/main.js"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 60
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 5
+# App Sleeping: the service scales to zero after ~10 minutes without inbound
+# traffic and wakes on the next request (a few seconds of cold start). The
+# server is silent when idle (no timers, request-only logging), which is what
+# makes it eligible for sleep.
+sleepApplication = true

@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, format, architecture & secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Lint (oxlint)
+        run: pnpm lint
+      - name: Format check (prettier)
+        run: pnpm format:check
+      - name: Secret scanning (secretlint)
+        run: pnpm secrets
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Architecture rules (dependency-cruiser)
+        run: pnpm arch
+
+  tests:
+    name: Unit & integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Unit tests
+        run: pnpm test:unit
+      - name: Integration tests
+        run: pnpm test:integration
+
+  e2e:
+    name: End-to-end tests (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build web & server
+        run: pnpm build
+      - name: Install Playwright browsers
+        run: pnpm --filter @cahier/e2e exec playwright install --with-deps chromium
+      - name: Run e2e tests
+        run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7
+
+  boot-check:
+    name: Production boot check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build (same command as the Railway native build)
+        run: pnpm build
+      - name: Boot the server and check health
+        run: |
+          WRITE_TOKEN=ci-check node apps/server/dist/main.js &
+          SERVER_PID=$!
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:3000/api/health > /dev/null; then
+              echo "healthy" && kill "$SERVER_PID" && exit 0
+            fi
+            sleep 1
+          done
+          kill "$SERVER_PID" || true
+          exit 1
+
+  # Deployment: Railway builds natively (Railpack — see railway.toml), triggered by its
+  # GitHub integration on push to main. Enable "Wait for CI" (Check Suites) in the Railway
+  # service settings so the deployment only starts once this workflow is green.
