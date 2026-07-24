@@ -304,13 +304,16 @@ function verifyPkce(codeVerifier: string, codeChallenge: string): boolean {
 function isValidRedirectUri(uri: string): boolean {
   try {
     const parsed = new URL(uri);
-    // Allow https everywhere, and http/custom schemes only for loopback / native clients.
+    // https anywhere; http only for loopback development clients.
     if (parsed.protocol === 'https:') return true;
     if (parsed.protocol === 'http:') {
       return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
     }
-    // Native app custom schemes (e.g. "myapp://callback") are allowed.
-    return parsed.protocol.endsWith(':') && parsed.protocol !== 'http:';
+    // Native-app custom schemes only when they look like a reverse-DNS
+    // identifier (e.g. "com.example.app://callback"). This deliberately
+    // rejects dangerous web schemes such as javascript:, data: and file:.
+    const scheme = parsed.protocol.slice(0, -1);
+    return /^[a-z][a-z0-9+.-]*\.[a-z0-9+.-]+$/i.test(scheme);
   } catch {
     return false;
   }

@@ -68,10 +68,15 @@ async function main(): Promise<void> {
   if (!writeAccess.enabled) {
     app.log.warn('WRITE_TOKEN is not set: all write operations are disabled');
   }
-  if (oauthService === null) {
-    app.log.info('OAUTH_SECRET is not set: the MCP endpoint stays public (no OAuth)');
-  } else {
+  if (oauthService !== null) {
     app.log.info('OAuth enabled: the MCP endpoint requires a valid access token');
+  } else if (config.oauthSecret !== null) {
+    // Secret present but no password to authorize against: OAuth cannot start.
+    app.log.warn(
+      'OAUTH_SECRET is set but no consent password is available (OAUTH_PASSWORD or WRITE_TOKEN): OAuth is disabled, the MCP endpoint stays public',
+    );
+  } else {
+    app.log.info('OAUTH_SECRET is not set: the MCP endpoint stays public (no OAuth)');
   }
 
   try {

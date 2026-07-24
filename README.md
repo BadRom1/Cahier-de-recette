@@ -108,6 +108,13 @@ consentement).
 Tant que `OAUTH_SECRET` est absent, `/mcp` reste public (lecture ouverte, écriture protégée
 par `WRITE_TOKEN`) — comportement inchangé.
 
+**Compromis du design sans état** : faute de stockage, un code d'autorisation reste
+rejouable pendant sa courte durée de vie (5 min) — l'usage unique du code n'est pas imposé —
+et les jetons de rafraîchissement ne peuvent être ni tournés ni révoqués avant expiration.
+Le risque est borné par PKCE (le code seul est inutile sans le `code_verifier`) et par les
+TTL courts (code 5 min, accès 1 h). Si un état partagé devient acceptable un jour, un petit
+magasin de `jti` consommés lèverait ces deux limites.
+
 ### Application mobile Cooklang (Android / iOS)
 
 Chaque recette est servie **au format Cooklang brut** :

@@ -65,6 +65,29 @@ describe('OAuthService', () => {
     );
   });
 
+  it('accepts https and reverse-DNS app schemes but rejects dangerous ones', () => {
+    const service = makeService();
+    // Allowed: https, http loopback, reverse-DNS native scheme.
+    expect(() =>
+      service.registerClient({ redirectUris: ['https://claude.ai/callback'] }),
+    ).not.toThrow();
+    expect(() =>
+      service.registerClient({ redirectUris: ['http://localhost:1234/cb'] }),
+    ).not.toThrow();
+    expect(() =>
+      service.registerClient({ redirectUris: ['com.example.app://callback'] }),
+    ).not.toThrow();
+    // Rejected: dangerous web schemes and bare custom schemes.
+    for (const uri of [
+      'javascript:alert(1)',
+      'data:text/html,x',
+      'file:///etc/passwd',
+      'myapp://cb',
+    ]) {
+      expect(() => service.registerClient({ redirectUris: [uri] })).toThrow(OAuthError);
+    }
+  });
+
   it('validates authorization requests', () => {
     const service = makeService();
     const clientId = register(service);
