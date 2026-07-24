@@ -8,11 +8,17 @@ import type { WriteAccess } from '../auth/write-access.js';
 import { errorBodyOf, httpStatusOf } from './error-mapping.js';
 import { registerRecipeRoutes } from './recipe-routes.js';
 import { registerMcpRoutes } from '../mcp/mcp-routes.js';
+import type { OAuthService } from '../oauth/oauth-service.js';
+import { registerOAuthRoutes } from '../oauth/oauth-routes.js';
 
 export interface BuildAppOptions {
   useCases: UseCases;
   writeAccess: WriteAccess;
   webDistDir?: string | null;
+  /** When set, enables the OAuth authorization server and protects `/mcp`. */
+  oauthService?: OAuthService | null;
+  /** Public base URL used in OAuth metadata; derived from the request when unset. */
+  publicUrl?: string | null;
   loggerInstance?: FastifyBaseLogger;
 }
 
@@ -49,8 +55,19 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     return reply.code(status).send(errorBodyOf(error));
   });
 
+  const oauthService = options.oauthService ?? null;
+  const publicUrl = options.publicUrl ?? null;
+
   registerRecipeRoutes(app, { useCases: options.useCases, writeAccess: options.writeAccess });
-  registerMcpRoutes(app, { useCases: options.useCases, writeAccess: options.writeAccess });
+  registerMcpRoutes(app, {
+    useCases: options.useCases,
+    writeAccess: options.writeAccess,
+    oauthService,
+    publicUrl,
+  });
+  if (oauthService !== null) {
+    registerOAuthRoutes(app, { oauthService, publicUrl });
+  }
 
   const webDistDir =
     options.webDistDir === undefined || options.webDistDir === null
